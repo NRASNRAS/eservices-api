@@ -8,7 +8,7 @@ const app = express()
 app.use(express.json())
 
 app.get("/", (req, res) => {
-    res.send("Welcome to NRES API")
+    res.send("Welcome to the eServices API!")
 })
 
 app.use("/v1/passport", passportRouter)

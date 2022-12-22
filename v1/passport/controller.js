@@ -70,7 +70,8 @@ const lookupPassportDiscord = (req, res) => {
 
 const createPassport = (req, res) => {
     const username = req.body.username;
-    const discord = req.body.discord;
+    let discord = req.body.discord;
+    const place = req.body.place;
     const issuedbyperson = req.body.issuedby;
 
     util.verifyToken(req, res).then(async (token) => {
@@ -81,16 +82,22 @@ const createPassport = (req, res) => {
         
         const id = util.generateId();
         const country = token.country;
-        const organization = token.organization;
+        const validfor = token.passportsvalidfor;
 
-        if (!(country && organization && username && discord && issuedbyperson)) {
+        if (!(country && place && username && issuedbyperson)) {
             util.handleErrorCode(req, res, new Error("Bad request"), 400)
             return
         }
         
         // Check if that person already has a passport
         try {
-            const lookupResults = await pool.query(queries.lookupDiscordAndUsername, [username, discord]);
+            let lookupResults;
+            if (discord) {
+                lookupResults = await pool.query(queries.lookupDiscordAndUsername, [username, discord]);
+            } else {
+                lookupResults = await pool.query(queries.lookupUsername, [username]);
+            }
+
             if (lookupResults.rows.length) {
                 util.handleErrorCode(req, res, new Error(`That person already has a valid passport! Passport ID ${lookupResults.rows[0].id}`), 409);
                 return;
@@ -100,7 +107,7 @@ const createPassport = (req, res) => {
             return;
         }
 
-        pool.query(queries.createPassport, [id, username, country, discord, organization, issuedbyperson], (error, results) => {
+        pool.query(queries.createPassport, [id, username, country, discord, issuedbyperson, place, validfor], (error, results) => {
             if (error) {
                 util.handleError(req, res, error);
                 return;
@@ -121,7 +128,6 @@ const invalidatePassport = (req, res) => {
         }
 
         const country = token.country;
-        const organization = token.organization;
 
         // Check if that passport exists and if it's issued by the same country & organization
         try {
@@ -131,8 +137,8 @@ const invalidatePassport = (req, res) => {
                 return
             }
 
-            if (!(lookupResults.rows[0].country == country && lookupResults.rows[0].issuedby == organization)) {
-                util.handleErrorCode(req, res, new Error(`You don't have the permissions to invalidate a ${lookupResults.rows[0].country} ${lookupResults.rows[0].issuedby} passport.`), 400)
+            if (!(lookupResults.rows[0].country == country)) {
+                util.handleErrorCode(req, res, new Error(`You don't have the permissions to invalidate a ${lookupResults.rows[0].country} passport.`), 400)
                 return
             }
         } catch (error) {
