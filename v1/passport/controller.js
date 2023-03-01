@@ -55,7 +55,7 @@ const lookupPassport = async (req, res) => {
 
     let player = await _getPlayer(username);
     if (player[0]) {
-        util.handleErrorCode(req, res, new Error("Something went wrong!"), 500);
+        util.handleErrorCode(req, res, new Error("Not found!"), 404);
         return;
     }
 
