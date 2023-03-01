@@ -1,12 +1,30 @@
 const pool = require("../../db")
 const util = require("../../util")
+
 const queries = require("./queries")
+const playerQueries = require("../player/queries")
+
+const {_getPlayer, _updateDiscord} = require("../player/controller")
+
+function formatPassportJson(json, discord) {
+    return {
+        id: json.id,
+        isvalid: json.isvalid,
+        username: json.player,
+        country: json.country,
+        discord: discord,
+        issuedon: json.issuedon,
+        expires: json.expires,
+        issuedby: json.issuedby,
+        place: json.place
+    }
+}
 
 const getPassportId = (req, res) => {
-    pool.query(queries.getPassportId, [req.params.id], (error, results) => {
+    pool.query(queries.getPassportId, [req.params.id], async (error, results) => {
         if (error) {
             util.handleError(req, res, error)
-            return
+            return;
         }
 
         if (results.rows[0]) {
@@ -17,15 +35,31 @@ const getPassportId = (req, res) => {
                 pool.query(queries.makePassportInvalid, [req.params.id]);
             }
         } else {
-            results.rows[0] = []
+            util.handleErrorCode(req, res, new Error("Not found!"), 404);
+            return;
+        }
+
+        let player = await _getPlayer(results.rows[0].player);
+
+        if (player[0]) {
+            util.handleErrorCode(req, res, new Error("Something went wrong!"), 500);
+            return;
         }
         
-        util.sendJson(results.rows[0], req, res)
+        util.sendJson(formatPassportJson(results.rows[0], player[1].discord), req, res)
     })
 }
 
-const lookupPassportUsername = (req, res) => {
-    pool.query(queries.lookupUsername, [req.params.username], (error, results) => {
+const lookupPassport = async (req, res) => {
+    const username = req.params.username;
+
+    let player = await _getPlayer(username);
+    if (player[0]) {
+        util.handleErrorCode(req, res, new Error("Something went wrong!"), 500);
+        return;
+    }
+
+    pool.query(queries.lookupPlayer, [player[1].username], (error, results) => {
         if (error) {
             util.handleError(req, res, error)
             return
@@ -39,40 +73,19 @@ const lookupPassportUsername = (req, res) => {
                 pool.query(queries.makePassportInvalid, [req.params.id]);
             }
         } else {
-            results.rows[0] = []
+            util.handleErrorCode(req, res, new Error("Not found!"), 404);
+            return;
         }
         
-        util.sendJson(results.rows[0], req, res)
-    });
-}
-
-const lookupPassportDiscord = (req, res) => {
-    pool.query(queries.lookupDiscord, [req.params.discord], (error, results) => {
-        if (error) {
-            util.handleError(req, res, error)
-            return
-        }
-
-        if (results.rows[0]) {
-            let now = new Date();
-            let expiry = new Date(results.rows[0].expires);
-            if (now > expiry) {
-                results.rows[0].isvalid = false;
-                pool.query(queries.makePassportInvalid, [req.params.id]);
-            }
-        } else {
-            results.rows[0] = []
-        }
-        
-        util.sendJson(results.rows[0], req, res)
+        util.sendJson(formatPassportJson(results.rows[0], player[1].discord), req, res)
     });
 }
 
 const createPassport = (req, res) => {
     const username = req.body.username;
-    let discord = req.body.discord;
     const place = req.body.place;
     const issuedbyperson = req.body.issuedby;
+    let discord = req.body.discord;
 
     util.verifyToken(req, res).then(async (token) => {
         if (!token) {
@@ -88,15 +101,31 @@ const createPassport = (req, res) => {
             util.handleErrorCode(req, res, new Error("Bad request"), 400)
             return
         }
+
+        let playerRecord = await _getPlayer(username);
+
+        // Player record doesn't exist, create it
+        if (playerRecord[0]) {
+            await pool.query(playerQueries.createPlayer, [username, discord], (error, results) => {
+                if (error) {
+                    util.handleError(req, res, error);
+                    return;
+                }
+            });
+
+            // Get it again after creating
+            playerRecord = await _getPlayer(username);
+
+            // If still doesn't exist then die
+            if (playerRecord[0]) {
+                util.handleErrorCode(req, res, new Error("Something went wrong!"), 500);
+                return;
+            }
+        }
         
         // Check if that person already has a passport
         try {
-            let lookupResults;
-            if (discord) {
-                lookupResults = await pool.query(queries.lookupDiscordAndUsername, [username, discord]);
-            } else {
-                lookupResults = await pool.query(queries.lookupUsername, [username]);
-            }
+            let lookupResults = await pool.query(queries.lookupPlayer, [username]);
 
             if (lookupResults.rows.length) {
                 util.handleErrorCode(req, res, new Error(`That person already has a valid passport! Passport ID ${lookupResults.rows[0].id}`), 409);
@@ -107,7 +136,18 @@ const createPassport = (req, res) => {
             return;
         }
 
-        pool.query(queries.createPassport, [id, username, country, discord, issuedbyperson, place, validfor], (error, results) => {
+        if (!discord) discord = "";
+
+        if (playerRecord[1].discord != discord) {
+            if (playerRecord[1].discord) {
+                util.handleErrorCode(req, res, new Error(`The Discord account associated with the player that you have entered is <@${playerRecord[1].discord}>, yet you entered the <@${discord}> account!`), 400);
+                return;
+            } else {
+                await _updateDiscord(username, discord);
+            }
+        }
+
+        pool.query(queries.createPassport, [id, username, country, issuedbyperson, place, validfor], (error, results) => {
             if (error) {
                 util.handleError(req, res, error);
                 return;
@@ -160,7 +200,6 @@ const invalidatePassport = (req, res) => {
 module.exports = {
     getPassportId,
     createPassport,
-    lookupPassportUsername,
-    lookupPassportDiscord,
+    lookupPassport,
     invalidatePassport,
 }

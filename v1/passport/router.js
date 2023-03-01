@@ -9,7 +9,6 @@ router.post("/invalidate", controller.invalidatePassport)
 
 // Public
 router.get("/:id", controller.getPassportId)
-router.get("/lookup/discord/:discord", controller.lookupPassportDiscord)
-router.get("/lookup/nickname/:username", controller.lookupPassportUsername)
+router.get("/lookup/:username", controller.lookupPassport)
 
 module.exports = router
