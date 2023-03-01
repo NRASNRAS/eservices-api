@@ -5,7 +5,7 @@ const queries = require("./queries")
 // format: [didError, json]
 // if didError is true, then it is [didError, error]
 async function _getPlayer(user) {
-    let isDiscordId = /^[0-9]{18}$/.test(user);
+    let isDiscordId = /^[0-9]{17,21}$/.test(user);
 
     let lookupResults;
     if (isDiscordId) {
