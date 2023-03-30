@@ -1,7 +1,7 @@
 {
   "name": "nras-api",
   "version": "0.2.0",
-  "description": "Night Realm Administrative Services - eServices - API",
+  "description": "eServices API",
   "main": "main.js",
   "scripts": {
     "start": "node server.js",
