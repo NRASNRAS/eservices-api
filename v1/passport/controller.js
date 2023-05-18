@@ -102,10 +102,27 @@ const createPassport = (req, res) => {
             util.handleErrorCode(req, res, new Error("Not authorized!"), 401)
             return
         }
-        
-        const id = util.generateId();
+
         const country = token.country;
         const validfor = token.passportsvalidfor;
+        let id = util.generateId();
+
+        // Check if the generated id already exists and regenerate it if it does
+        let hasCollision = false;
+        do {
+            try {
+                const lookupResults = await pool.query(queries.getPassportId, [id]);
+                if (lookupResults.rows[0]) {
+                    id = util.generateId();
+                    hasCollision = true;
+                } else {
+                    hasCollision = false;
+                }
+            } catch (error) {
+                util.handleError(req, res, error);
+                return;
+            }
+        } while (hasCollision);
 
         if (!(country && place && username && issuedbyperson)) {
             util.handleErrorCode(req, res, new Error("Bad request"), 400)
@@ -159,11 +176,11 @@ const createPassport = (req, res) => {
 
         pool.query(queries.createPassport, [id, username, country, issuedbyperson, place, validfor], (error, results) => {
             if (error) {
-                util.handleError(req, res, error);
-                return;
+                util.handleError(req, res, error)
+                return
             }
-    
-            util.sendJson({type: "success", id: id}, req, res);
+
+            util.sendJson({ type: "success", id: id }, req, res)
         })
     })
 }
