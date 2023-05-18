@@ -12,7 +12,7 @@ function formatPassportJson(json, discord) {
         isvalid: json.isvalid,
         username: json.player,
         country: json.country,
-        discord: discord,
+        discord: discord || "",
         issuedon: json.issuedon,
         expires: json.expires,
         issuedby: json.issuedby,
@@ -32,7 +32,12 @@ const getPassportId = (req, res) => {
             let expiry = new Date(results.rows[0].expires);
             if (now > expiry) {
                 results.rows[0].isvalid = false;
-                pool.query(queries.makePassportInvalid, [req.params.id]);
+                pool.query(queries.makePassportInvalid, [req.params.id], (error, results) => {
+                    if (error) {
+                        util.handleError(req, res, error);
+                        return;
+                    }
+                });
             }
         } else {
             util.handleErrorCode(req, res, new Error("Not found!"), 404);
@@ -46,7 +51,7 @@ const getPassportId = (req, res) => {
             return;
         }
         
-        util.sendJson(formatPassportJson(results.rows[0], player[1].discord), req, res)
+        util.sendJson(formatPassportJson(results.rows[0], player[1].discord), req, res);
     })
 }
 
@@ -70,7 +75,12 @@ const lookupPassport = async (req, res) => {
             let expiry = new Date(results.rows[0].expires);
             if (now > expiry) {
                 results.rows[0].isvalid = false;
-                pool.query(queries.makePassportInvalid, [req.params.id]);
+                pool.query(queries.makePassportInvalid, [results.rows[0].id], (error, results) => {
+                    if (error) {
+                        util.handleError(req, res, error);
+                        return;
+                    }
+                });
             }
         } else {
             util.handleErrorCode(req, res, new Error("Not found!"), 404);
