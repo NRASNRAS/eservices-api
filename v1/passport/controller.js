@@ -16,7 +16,8 @@ function formatPassportJson(json, discord) {
         issuedon: json.issuedon,
         expires: json.expires,
         issuedby: json.issuedby,
-        place: json.place
+        place: json.place,
+        platform: json.platform
     }
 }
 
@@ -105,6 +106,7 @@ const createPassport = (req, res) => {
 
         const country = token.country;
         const validfor = token.passportsvalidfor;
+        const platform = token.platform || "eServices";
         let id = util.generateId();
 
         // Check if the generated id already exists and regenerate it if it does
@@ -174,7 +176,7 @@ const createPassport = (req, res) => {
             }
         }
 
-        pool.query(queries.createPassport, [id, username, country, issuedbyperson, place, validfor], (error, results) => {
+        pool.query(queries.createPassport, [id, username, country, issuedbyperson, place, validfor, platform], (error, results) => {
             if (error) {
                 util.handleError(req, res, error)
                 return
